@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+
+# Mac
+.DS_Store
+
+# Streamlit cache
+.streamlit/
+
+# Models (optional if large)
+*.joblib
+*.pkl
+
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+
+data/raw/
+data/processed/
+
+*.html
+*.pdf
+*.ipynb

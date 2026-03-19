@@ -62,7 +62,10 @@ with tab1:
             st.markdown("**Genome-based (NN)**")
             rec_genome = recommend_by_genome(movie_content_df, genome_nn, genome_indices_map, choice, top_n=10)
             if rec_genome is None:
-                st.info("Genome recommender not available (missing artifacts or no genome signal).")
+                if genome_nn is None or genome_indices_map is None:
+                    st.info("Genome recommender is unavailable because genome model artifacts are missing.")
+                else:
+                    st.info("This selected movie has no usable genome signal. Try another movie for genome-based recommendations.")
             else:
                 st.dataframe(rec_genome, use_container_width=True)
 

@@ -85,11 +85,16 @@ def _pick_svd_model_path() -> str:
 # -----------------------------
 def load_data_and_models():
     """
-    Returns:
-      movie_content_df, ratings_df, movie_map,
-      tfidf_vectorizer, tfidf_matrix,
-      genome_nn, genome_indices_map,
-      svd, user_rated_movies, all_movie_ids, meta
+        Returns:
+            movie_content_df, ratings_df, movie_map,
+            tfidf_vectorizer, tfidf_matrix,
+            genome_nn, genome_indices_map,
+            svd, user_rated_movies, all_movie_ids, meta
+
+        Note:
+            To keep Streamlit Cloud startup memory low, CF artifacts are intentionally
+            not loaded at startup. CF functions gracefully return empty results when
+            `svd` is None.
     """
     # ---- Data (try multiple locations) ----
     movie_content_paths = [
@@ -105,28 +110,25 @@ def load_data_and_models():
 
     try:
         movie_content_df = _safe_read_csv(movie_content_paths)
-        ratings_df = _safe_read_csv(ratings_paths)
     except FileNotFoundError as e:
         raise FileNotFoundError(
             f"{e}\n\n"
             "Fix:\n"
             "1) Run cleaning/preprocessing notebook to generate:\n"
             "   - data/merged/movie_content_final.csv\n"
-            "   - data/merged/ratings_final.csv\n"
-            "2) Or place them in data/processed/ or data/.\n"
+            "2) Or place it in data/processed/ or data/.\n"
         )
+
+    # Keep schema stable without loading large ratings file at startup.
+    ratings_df = pd.DataFrame(columns=["userId", "movieId", "rating", "timestamp"])
 
     movie_content_df = _ensure_title_unique(movie_content_df)
 
     keep_cols = [c for c in ["movieId", "title", "genres", "tmdbId", "title_unique"] if c in movie_content_df.columns]
     movie_map = movie_content_df[keep_cols].drop_duplicates("movieId").copy()
 
-    # user rated map for filtering
+    # User-rated map is intentionally empty when CF artifacts are disabled.
     user_rated_movies: Dict[int, set] = {}
-    if "userId" in ratings_df.columns and "movieId" in ratings_df.columns:
-        user_rated_movies = (
-            ratings_df.groupby("userId")["movieId"].apply(lambda s: set(map(int, s.values))).to_dict()
-        )
 
     all_movie_ids = movie_map["movieId"].astype(int).unique().tolist()
 
@@ -151,31 +153,26 @@ def load_data_and_models():
         genome_nn = joblib.load(genome_nn_path)
         genome_indices_map = joblib.load(genome_indices_path)
 
-    # Collaborative Filtering SVD (tuned preferred) - optional
+    # Collaborative Filtering SVD (tuned preferred) - intentionally disabled at startup
+    # to avoid out-of-memory crashes on Streamlit Cloud health checks.
     svd = None
     svd_path = None
     best_params = None
-    try:
-        svd_path = _pick_svd_model_path()
+    params_path = os.path.join(MODELS_DIR, "svd_best_params.json")
+    if os.path.exists(params_path):
         try:
-            svd = joblib.load(svd_path)
-        except Exception as e:
-            # Model may not deserialize if scikit-surprise isn't installed
-            pass
-        
-        # best params (optional)
-        params_path = os.path.join(MODELS_DIR, "svd_best_params.json")
-        if os.path.exists(params_path):
-            try:
-                with open(params_path, "r", encoding="utf-8") as f:
-                    best_params = json.load(f)
-            except Exception:
-                best_params = None
-    except FileNotFoundError:
-        # SVD model files don't exist
-        pass
+            with open(params_path, "r", encoding="utf-8") as f:
+                best_params = json.load(f)
+        except Exception:
+            best_params = None
 
-    meta = {"project_root": PROJECT_ROOT, "svd_path": svd_path, "svd_best_params": best_params}
+    meta = {
+        "project_root": PROJECT_ROOT,
+        "svd_path": svd_path,
+        "svd_best_params": best_params,
+        "cf_enabled": False,
+        "cf_reason": "Disabled at startup to keep memory usage within Streamlit Cloud limits.",
+    }
     return (
         movie_content_df,
         ratings_df,

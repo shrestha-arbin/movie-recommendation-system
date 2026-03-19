@@ -52,6 +52,8 @@ if not data_loaded:
 
 with st.expander("Model info"):
     st.write("Loaded SVD model:", meta.get("svd_path"))
+    if not meta.get("cf_enabled", True):
+        st.warning(meta.get("cf_reason", "Collaborative filtering is currently unavailable."))
     if meta.get("svd_best_params"):
         st.json(meta["svd_best_params"])
 
@@ -93,6 +95,9 @@ with tab1:
             user_for_hybrid = st.text_input("Optional userId for CF boost", value="")
             user_id_val = int(user_for_hybrid) if user_for_hybrid.strip().isdigit() else None
 
+            if user_id_val is not None and svd is None:
+                st.info("CF boost is currently unavailable. Showing Text + Genome hybrid.")
+
             rec_hybrid = recommend_hybrid_from_movie(
                 movie_content_df=movie_content_df,
                 movie_map=movie_map,
@@ -114,6 +119,10 @@ with tab1:
 with tab2:
     st.subheader("Personalized recommendations for a user (Tuned SVD)")
     user_id = st.text_input("Enter userId", "42")
+
+    if svd is None:
+        st.info("Collaborative filtering is currently unavailable in this deployment.")
+        st.stop()
 
     if user_id.strip().isdigit():
         user_id_val = int(user_id)

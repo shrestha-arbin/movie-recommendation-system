@@ -1,36 +1,55 @@
 # src/app/app.py
 import streamlit as st
 import pandas as pd
-from recommenders import (
-    load_data_and_models,
-    search_title,
-    recommend_by_text,
-    recommend_by_genome,
-    recommend_by_cf,
-    recommend_hybrid_from_movie
-)
+import sys
 
 st.set_page_config(page_title="Movie Recommendation System", layout="wide")
 
-@st.cache_resource
-def load_all():
-    return load_data_and_models()
-
-(
-    movie_content_df,
-    ratings_df,
-    movie_map,
-    tfidf_vectorizer,
-    tfidf_matrix,
-    genome_nn,
-    genome_indices_map,
-    svd,
-    user_rated_movies,
-    all_movie_ids,
-    meta
-) = load_all()
+# Try to load models, with fallback if it fails
+try:
+    from recommenders import (
+        load_data_and_models,
+        search_title,
+        recommend_by_text,
+        recommend_by_genome,
+        recommend_by_cf,
+        recommend_hybrid_from_movie
+    )
+    
+    @st.cache_resource
+    def load_all():
+        return load_data_and_models()
+    
+    (
+        movie_content_df,
+        ratings_df,
+        movie_map,
+        tfidf_vectorizer,
+        tfidf_matrix,
+        genome_nn,
+        genome_indices_map,
+        svd,
+        user_rated_movies,
+        all_movie_ids,
+        meta
+    ) = load_all()
+    
+    data_loaded = True
+    load_error = None
+    
+except Exception as e:
+    data_loaded = False
+    load_error = str(e)
+    import traceback
+    error_detail = traceback.format_exc()
 
 st.title("🎬 Movie Recommendation System")
+
+if not data_loaded:
+    st.error(f"Failed to load models: {load_error}")
+    st.code(error_detail, language="python")
+    st.stop()
+
 with st.expander("Model info"):
     st.write("Loaded SVD model:", meta.get("svd_path"))
     if meta.get("svd_best_params"):

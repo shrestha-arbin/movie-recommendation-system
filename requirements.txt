@@ -1,0 +1,8 @@
+streamlit==1.55.0
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.5.1
+scikit-surprise==1.1.4
+scipy==1.13.1
+joblib==1.4.2
+pyarrow==17.0.0

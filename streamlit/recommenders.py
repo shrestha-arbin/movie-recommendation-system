@@ -151,19 +151,29 @@ def load_data_and_models():
         genome_nn = joblib.load(genome_nn_path)
         genome_indices_map = joblib.load(genome_indices_path)
 
-    # Collaborative Filtering SVD (tuned preferred)
-    svd_path = _pick_svd_model_path()
-    svd = joblib.load(svd_path)
-
-    # best params (optional)
+    # Collaborative Filtering SVD (tuned preferred) - optional
+    svd = None
+    svd_path = None
     best_params = None
-    params_path = os.path.join(MODELS_DIR, "svd_best_params.json")
-    if os.path.exists(params_path):
+    try:
+        svd_path = _pick_svd_model_path()
         try:
-            with open(params_path, "r", encoding="utf-8") as f:
-                best_params = json.load(f)
-        except Exception:
-            best_params = None
+            svd = joblib.load(svd_path)
+        except Exception as e:
+            # Model may not deserialize if scikit-surprise isn't installed
+            pass
+        
+        # best params (optional)
+        params_path = os.path.join(MODELS_DIR, "svd_best_params.json")
+        if os.path.exists(params_path):
+            try:
+                with open(params_path, "r", encoding="utf-8") as f:
+                    best_params = json.load(f)
+            except Exception:
+                best_params = None
+    except FileNotFoundError:
+        # SVD model files don't exist
+        pass
 
     meta = {"project_root": PROJECT_ROOT, "svd_path": svd_path, "svd_best_params": best_params}
     return (
@@ -266,6 +276,10 @@ def recommend_by_cf(
     candidate_pool: int = 5000,
     random_state: int = 42,
 ) -> pd.DataFrame:
+    # SVD model may not be available
+    if svd is None:
+        return pd.DataFrame(columns=["movieId", "title", "genres", "cf_score", "tmdbId"])
+    
     rng = np.random.default_rng(random_state)
 
     rated = user_rated_movies.get(int(user_id), set())
@@ -278,9 +292,13 @@ def recommend_by_cf(
         candidates = rng.choice(candidates, size=candidate_pool, replace=False).tolist()
 
     preds = []
-    for mid in candidates:
-        est = float(svd.predict(int(user_id), int(mid)).est)
-        preds.append((int(mid), est))
+    try:
+        for mid in candidates:
+            est = float(svd.predict(int(user_id), int(mid)).est)
+            preds.append((int(mid), est))
+    except Exception:
+        # SVD predict failed (e.g., scikit-surprise not available)
+        return pd.DataFrame(columns=["movieId", "title", "genres", "cf_score", "tmdbId"])
 
     preds.sort(key=lambda x: x[1], reverse=True)
     top = preds[:top_n]
